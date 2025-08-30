@@ -3,13 +3,15 @@ import StudentViewCommonHeader from "./header";
 
 function StudentViewCommonLayout() {
   const location = useLocation();
+  const isProgressPage = location.pathname.includes("course-progress");
+  
   return (
-    <div>
-      {!location.pathname.includes("course-progress") ? (
-        <StudentViewCommonHeader />
-      ) : null}
+    <div className={!isProgressPage ? "min-h-screen bg-slate-50" : ""}>
+      {!isProgressPage ? <StudentViewCommonHeader /> : null}
 
-      <Outlet />
+      <div className={!isProgressPage ? "pt-[72px]" : ""}>
+        <Outlet />
+      </div>
     </div>
   );
 }
