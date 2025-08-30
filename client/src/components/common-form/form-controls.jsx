@@ -8,11 +8,15 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
-import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { Mail, Lock, User, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 
 function FormControls({ formControls = [], formData, setFormData }) {
   const [showPassword, setShowPassword] = useState({});
+  const [fieldFocus, setFieldFocus] = useState({});
+  const [fieldValid, setFieldValid] = useState({});
+  const [fieldTyping, setFieldTyping] = useState({});
+  const typingTimeoutRef = useRef({});
 
   function getIconByFieldName(name) {
     switch (name) {
@@ -33,11 +37,83 @@ function FormControls({ formControls = [], formData, setFormData }) {
       [fieldName]: !prev[fieldName]
     }));
   }
+  
+  function handleFocus(fieldName) {
+    setFieldFocus(prev => ({
+      ...prev,
+      [fieldName]: true
+    }));
+  }
+  
+  function handleBlur(fieldName) {
+    setFieldFocus(prev => ({
+      ...prev,
+      [fieldName]: false
+    }));
+    
+    // Validate field on blur
+    validateField(fieldName, formData[fieldName] || "");
+  }
+  
+  function validateField(fieldName, value) {
+    let isValid = false;
+    
+    if (fieldName === "userEmail") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      isValid = emailRegex.test(value);
+    } else if (fieldName === "password") {
+      isValid = value.length >= 6;
+    } else if (fieldName === "userName") {
+      isValid = value.length >= 3;
+    } else {
+      isValid = value.trim() !== "";
+    }
+    
+    setFieldValid(prev => ({
+      ...prev,
+      [fieldName]: value ? isValid : null // null means not validated yet (empty)
+    }));
+    
+    return isValid;
+  }
+  
+  function handleChange(fieldName, value) {
+    // Update form data
+    setFormData({
+      ...formData,
+      [fieldName]: value,
+    });
+    
+    // Set typing indicator
+    setFieldTyping(prev => ({
+      ...prev,
+      [fieldName]: true
+    }));
+    
+    // Clear previous timeout
+    if (typingTimeoutRef.current[fieldName]) {
+      clearTimeout(typingTimeoutRef.current[fieldName]);
+    }
+    
+    // Set new timeout
+    typingTimeoutRef.current[fieldName] = setTimeout(() => {
+      setFieldTyping(prev => ({
+        ...prev,
+        [fieldName]: false
+      }));
+      
+      // Validate field after typing stops
+      validateField(fieldName, value);
+    }, 800);
+  }
 
   function renderComponentByType(getControlItem) {
     let element = null;
     const currentControlItemValue = formData[getControlItem.name] || "";
     const iconElement = getIconByFieldName(getControlItem.name);
+    const isFocused = fieldFocus[getControlItem.name];
+    const isValid = fieldValid[getControlItem.name];
+    const isTyping = fieldTyping[getControlItem.name];
 
     switch (getControlItem.componentType) {
       case "input":
@@ -45,7 +121,7 @@ function FormControls({ formControls = [], formData, setFormData }) {
         if (getControlItem.type === "password") {
           element = (
             <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2">
+              <div className={`absolute left-3 top-1/2 -translate-y-1/2 transition-all duration-300 ${isFocused ? 'text-indigo-600' : ''}`}>
                 {iconElement}
               </div>
               <Input
@@ -54,32 +130,49 @@ function FormControls({ formControls = [], formData, setFormData }) {
                 placeholder={getControlItem.placeholder}
                 type={showPassword[getControlItem.name] ? "text" : "password"}
                 value={currentControlItemValue}
-                className={iconElement ? "pl-10 pr-10" : ""}
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    [getControlItem.name]: event.target.value,
-                  })
-                }
+                className={`pl-10 pr-10 transition-all duration-300 ${
+                  isFocused 
+                    ? 'border-indigo-500 ring-1 ring-indigo-500/30' 
+                    : isValid === true 
+                      ? 'border-green-500/50' 
+                      : isValid === false 
+                        ? 'border-red-500/50' 
+                        : ''
+                } ${isTyping ? 'animate-pulse-subtle' : ''}`}
+                onChange={(event) => handleChange(getControlItem.name, event.target.value)}
+                onFocus={() => handleFocus(getControlItem.name)}
+                onBlur={() => handleBlur(getControlItem.name)}
               />
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => togglePasswordVisibility(getControlItem.name)}
-              >
-                {showPassword[getControlItem.name] ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                {isValid === true && !isTyping && currentControlItemValue && (
+                  <CheckCircle className="h-4 w-4 text-green-500 animate-fadeIn" />
                 )}
-              </button>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                  onClick={() => togglePasswordVisibility(getControlItem.name)}
+                >
+                  {showPassword[getControlItem.name] ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              {isValid === false && !isTyping && currentControlItemValue && (
+                <p className="text-red-500 text-xs mt-1 ml-1 animate-slideDown">
+                  {getControlItem.name === "password" 
+                    ? "Password must be at least 6 characters" 
+                    : `Invalid ${getControlItem.placeholder}`}
+                </p>
+              )}
             </div>
           );
         } else {
           element = (
             <div className="relative">
               {iconElement && (
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <div className={`absolute left-3 top-1/2 -translate-y-1/2 transition-all duration-300 ${isFocused ? 'text-indigo-600' : ''}`}>
                   {iconElement}
                 </div>
               )}
@@ -89,14 +182,33 @@ function FormControls({ formControls = [], formData, setFormData }) {
                 placeholder={getControlItem.placeholder}
                 type={getControlItem.type}
                 value={currentControlItemValue}
-                className={iconElement ? "pl-10" : ""}
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    [getControlItem.name]: event.target.value,
-                  })
-                }
+                className={`${iconElement ? 'pl-10' : ''} transition-all duration-300 ${
+                  isFocused 
+                    ? 'border-indigo-500 ring-1 ring-indigo-500/30' 
+                    : isValid === true 
+                      ? 'border-green-500/50' 
+                      : isValid === false 
+                        ? 'border-red-500/50' 
+                        : ''
+                } ${isTyping ? 'animate-pulse-subtle' : ''}`}
+                onChange={(event) => handleChange(getControlItem.name, event.target.value)}
+                onFocus={() => handleFocus(getControlItem.name)}
+                onBlur={() => handleBlur(getControlItem.name)}
               />
+              {isValid === true && !isTyping && currentControlItemValue && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <CheckCircle className="h-4 w-4 text-green-500 animate-fadeIn" />
+                </div>
+              )}
+              {isValid === false && !isTyping && currentControlItemValue && (
+                <p className="text-red-500 text-xs mt-1 ml-1 animate-slideDown">
+                  {getControlItem.name === "userEmail" 
+                    ? "Please enter a valid email address" 
+                    : getControlItem.name === "userName" 
+                      ? "Name must be at least 3 characters" 
+                      : `Invalid ${getControlItem.placeholder}`}
+                </p>
+              )}
             </div>
           );
         }

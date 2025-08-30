@@ -11,6 +11,7 @@ import { AuthContext } from "@/context/auth-context";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CountUp from "react-countup";
 import { 
   ArrowRight, 
   Award, 
